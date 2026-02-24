@@ -19,12 +19,8 @@ Requirements (for cover sheets)
 - Python package 'pypdf' (preferred) or 'PyPDF2' for merging (optional).
   If not installed, you can still generate separate PDFs.
 
-Typical usage (answer sheets + cover sheets)
-  python3 generate_answer_sheets.py ... --cover-tex exam_instructions.tex
+For usage check 
 
-Notes about the cover content .tex
-- The file passed via --cover-tex should NOT contain \\documentclass or \\begin{document}.
-- Write only the body content you want after the header/student-id block.
 
 """
 from __future__ import annotations
