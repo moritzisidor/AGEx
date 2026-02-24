@@ -1,0 +1,7 @@
+scans/
+trash/
+answer_sheets/
+*.txt
+*.csv
+*.exe
+*.DS_Store
