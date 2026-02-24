@@ -1,7 +1,8 @@
 scans/
 trash/
 answer_sheets/
-*.txt
+env/
+terminal_commands.txt
 *.csv
 *.exe
 *.DS_Store
