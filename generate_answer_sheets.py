@@ -455,6 +455,7 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
+    os.makedirs("scans", exist_ok=True)
 
     # Auto date if not provided
     if not args.exam_date:
