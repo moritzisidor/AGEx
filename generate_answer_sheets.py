@@ -220,7 +220,13 @@ def render_sheet(path, layout, student_id, fill_solution,
         first = bxs[0]
 
         c.setFont("Times-Bold", 14)
-        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"Frage {q}")
+        prefix = layout.get("question_prefix", "")
+        if prefix:
+            prefix_str = str(prefix).rstrip(".")
+            qlabel = f"{prefix_str}.{q}"
+        else:
+            qlabel = str(q)
+        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"Frage {qlabel}")
 
         c.setFont("Times-Roman", 12)
         labels = option_labels(layout["per_question_option_counts"][q - 1])
@@ -421,6 +427,11 @@ def main():
     ap.add_argument("--student-id-count", type=int, default=1)
     ap.add_argument("--answer-key", required=True)
     ap.add_argument("--outdir", default="out")
+    ap.add_argument(
+        "--answer-sheet-prefix",
+        default=None,
+        help="Prefix to prepend to question numbers (e.g. 'A' or '1')."
+    )
 
     # New cover-sheet flags
     ap.add_argument("--cover-tex", default=None,
@@ -477,6 +488,19 @@ def main():
         int(tok) if tok.isdigit() else option_labels(per_q[i]).index(tok.upper())
         for i, tok in enumerate(key_tokens)
     ]
+
+    # Optional question prefix (e.g. 'A' => labels like 'A.1')
+    if args.answer_sheet_prefix is not None:
+        prefix = str(args.answer_sheet_prefix).strip()
+        if prefix.endswith("."):
+            prefix = prefix[:-1]
+        layout["question_prefix"] = prefix
+    else:
+        layout["question_prefix"] = ""
+
+    # If a prefix was provided, append it to the printable title (e.g. "Title - A")
+    if layout.get("question_prefix"):
+        layout["title"] = f"{layout.get('title', '')} - {layout['question_prefix']}"
 
     # Validate answer key indices against per-question option counts
     for i, ans in enumerate(layout["answer_key"]):
