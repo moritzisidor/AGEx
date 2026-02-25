@@ -17,6 +17,7 @@ The code is meant to be executed in a command line interface.
 python3 generate_answer_sheets.py \ \
 --paper A4 \ \
 --title "Answer sheet" \ \
+--answer-sheet-prefix "A" \ \
 --course-name "Probability Theory" \ \
 --professor "Prof. Pierre-Simon Laplace" \ \
 --exam-date "01. Januar 2000" \ \
