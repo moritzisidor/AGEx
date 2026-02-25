@@ -35,7 +35,8 @@ import cv2
 import numpy as np
 import pytesseract
 from pdf2image import convert_from_path
-
+import sys
+import time
 
 
 # ----------------------------
@@ -781,7 +782,20 @@ def main() -> None:
     unassigned_files: List[str] = []
 
     pdf_base = os.path.basename(args.scans)
+    total_pages = len(pages)
+    processed_pages = 0
+    start_ts = time.time()
     for page_no, img in pages:
+        processed_pages += 1
+        # Progress update before processing this page
+        try:
+            elapsed = time.time() - start_ts
+            avg = elapsed / processed_pages if processed_pages else 0.0
+            sys.stdout.write(f"\rGrading sheets: {processed_pages}/{total_pages} (page {page_no})")
+            sys.stdout.flush()
+        except Exception:
+            pass
+
         source_id = f"{pdf_base}#p{page_no}"
         result = grade_cv2_image(img, layout, args.fill_threshold, args.ambiguity_margin)
 
@@ -816,6 +830,10 @@ def main() -> None:
         graded[sid] = {"student_id": sid, **result}
 
     # Expected IDs roster
+    try:
+        sys.stdout.write("\n")
+    except Exception:
+        pass
     if args.student_id_start is not None and args.student_id_count is not None:
         expected_ids = [str(i).zfill(sid_digits) for i in range(args.student_id_start, args.student_id_start + args.student_id_count)]
     else:
