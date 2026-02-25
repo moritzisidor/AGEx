@@ -226,7 +226,7 @@ def render_sheet(path, layout, student_id, fill_solution,
             qlabel = f"{prefix_str}.{q}"
         else:
             qlabel = str(q)
-        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"Frage {qlabel}")
+        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"Q {qlabel}")
 
         c.setFont("Times-Roman", 12)
         labels = option_labels(layout["per_question_option_counts"][q - 1])
@@ -327,7 +327,7 @@ def compile_cover_pdf(
     professor: str,
     exam_date: str,
     student_id: str,
-    cover_title: str = "Prüfungsbogen",
+    cover_title: str = "Exam paper",
 ) -> None:
     """
     Compile a LaTeX cover PDF that inputs `cover_content_path` as cover_content.tex.
@@ -436,7 +436,7 @@ def main():
     # New cover-sheet flags
     ap.add_argument("--cover-tex", default=None,
                     help="Path to a LaTeX BODY file (no documentclass/begin{document}) to embed on the cover sheet.")
-    ap.add_argument("--cover-title", default="Prüfungsbogen",
+    ap.add_argument("--cover-title", default="Exam paper",
                     help="Label printed next to the Student-ID on the cover sheet.")
     ap.add_argument("--no-cover", action="store_true",
                     help="Disable cover sheet generation even if --cover-tex is provided.")
