@@ -4,7 +4,8 @@ The code is meant to be executed in a command line interface.
 ## Usage
 1) Clone this repository to your local machine
 2) Install requirements to be found in requirements.txt (Python 3.13.7)
-3) Open command line interface at respective folder
+3) Open command line interface at respective folder \
+   Note: For windows machine use command "python ..." instead of "python3 ..." for macOS
 
 ### A - Generate answer sheets
 1) Beforehand, execute "python3 generate_answer_sheets.py --help" to get an overview and description of all arguments to be passed.
