@@ -11,6 +11,7 @@ The code is meant to be executed in a command line interface.
 2) Edit "exam_instructions.tex" w.r.t individual examination regulations on cover sheet.
 3) run "python3 create_answer_sheet.py" with respective arguments (experiment with example below).
 4) *Output:* answer_sheets/answer_sheet_solution.pdf answer_sheets_all.pdf cover_sheets_all.pdf layout.json
+5) Crucial: Check visually, if amount of answers exceed paper margins. In this case, add answer-sheet-prefix argument and distribute questions onto two or more answer sheets.
 
 
 **Example (command line prompt):**\
