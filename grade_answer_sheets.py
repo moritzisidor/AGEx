@@ -73,8 +73,13 @@ def _build_digit_templates(size: int = 28) -> Dict[int, List[np.ndarray]]:
 _DIGIT_TEMPLATES = None  # lazy init
 
 
-def _template_match_digit(digit_bin_inv: np.ndarray) -> Optional[int]:
-    """Match a single digit image (binary-inverted: strokes=white) against templates."""
+def _template_match_digit(digit_bin_inv: np.ndarray, min_conf: float = 0.15) -> Optional[int]:
+    """Match a single digit image (binary-inverted: strokes=white) against templates.
+    
+    Args:
+        digit_bin_inv: binary inverted image of the digit
+        min_conf: minimum confidence threshold (default 0.15, relaxed from 0.25 for robustness)
+    """
     global _DIGIT_TEMPLATES
     if _DIGIT_TEMPLATES is None:
         _DIGIT_TEMPLATES = _build_digit_templates(28)
@@ -90,14 +95,18 @@ def _template_match_digit(digit_bin_inv: np.ndarray) -> Optional[int]:
                 best_score = score
                 best_d = d
 
-    # require at least some confidence (prevents random noise)
-    if best_score < 0.25:
+    # Relaxed threshold to handle variations in digit printing styles
+    if best_score < min_conf:
         return None
     return best_d
 
 
 def _group_and_read_digits(roi_gray: np.ndarray, expected_digits: int = 3) -> Optional[str]:
-    """Extract a group of N digit-like blobs from roi and read them via template matching."""
+    """Extract a group of N digit-like blobs from roi and read them via template matching.
+    
+    This function is more robust: tries with stricter criteria first, then relaxes limits
+    on grouping and template matching to handle variations in printed digits.
+    """
     if roi_gray.size == 0:
         return None
 
@@ -112,18 +121,20 @@ def _group_and_read_digits(roi_gray: np.ndarray, expected_digits: int = 3) -> Op
 
     H, W = bin_inv.shape[:2]
 
-    # collect plausible components
+    # collect plausible components with flexible criteria
     comps = []
     for c in cnts:
         x, y, w, h = cv2.boundingRect(c)
         if w * h < 250:
             continue
-        if h < 0.20 * H or h > 0.85 * H:
+        # Relaxed height boundaries to catch digits in various sizes
+        if h < 0.15 * H or h > 0.90 * H:
             continue
-        if w < 0.03 * W or w > 0.35 * W:
+        if w < 0.02 * W or w > 0.40 * W:
             continue
         ar = w / float(h)
-        if not (0.20 <= ar <= 1.20):  # digit-ish
+        # Relaxed aspect ratio: accounts for "0" and other digit variations
+        if not (0.15 <= ar <= 1.30):
             continue
         comps.append((x, y, w, h))
 
@@ -135,6 +146,7 @@ def _group_and_read_digits(roi_gray: np.ndarray, expected_digits: int = 3) -> Op
     best = None
     best_score = -1.0
 
+    # Try harder to find a good group by being more flexible
     for i in range(0, len(comps) - expected_digits + 1):
         group = comps[i:i + expected_digits]
         ys = [g[1] + g[3] / 2 for g in group]
@@ -143,7 +155,8 @@ def _group_and_read_digits(roi_gray: np.ndarray, expected_digits: int = 3) -> Op
         yspread = max(ys) - min(ys)
         hspread = max(hs) - min(hs)
         xspread = (group[-1][0] + group[-1][2]) - group[0][0]
-        score = 1.0 / (1.0 + yspread) + 1.0 / (1.0 + hspread) + 1.0 / (1.0 + xspread / 10.0)
+        # Increased tolerance in scoring (higher weights on spread = more tolerance)
+        score = 1.0 / (1.0 + yspread / 2.0) + 1.0 / (1.0 + hspread / 2.0) + 1.0 / (1.0 + xspread / 20.0)
         if score > best_score:
             best_score = score
             best = group
@@ -151,10 +164,14 @@ def _group_and_read_digits(roi_gray: np.ndarray, expected_digits: int = 3) -> Op
     if best is None:
         return None
 
+    # Try to read digits with standard threshold first, then relax if needed
     out = ""
     for (x, y, w, h) in best:
         digit = bin_inv[y:y + h, x:x + w]
-        d = _template_match_digit(digit)
+        d = _template_match_digit(digit, min_conf=0.15)
+        if d is None:
+            # As final fallback, try even more relaxed matching
+            d = _template_match_digit(digit, min_conf=0.10)
         if d is None:
             return None
         out += str(d)
@@ -495,14 +512,15 @@ def _best_digit_run(text: str) -> str:
 
 
 def _ocr_from_roi(roi: np.ndarray, expected_digits: int = 3) -> Optional[str]:
-    """Read digit runs from one ROI.
+    """Read digit runs from one ROI with multiple fallback strategies.
 
-    Primary: Tesseract via pytesseract (if available).
-    Fallback: pure-OpenCV template matching (works even if Tesseract isn't installed).
+    1. Tesseract via pytesseract (if available) with multiple preprocessing variants
+    2. OpenCV template matching as robust fallback
+    3. Template matching with relaxed thresholds as final fallback
     """
-    best = ""
+    candidates: List[str] = []
 
-    # 1) Try Tesseract (fastest when installed/configured)
+    # 1) Try Tesseract with multiple preprocessing variants (if available)
     for v in _preprocess_variants(roi):
         for psm in ("7", "6", "8"):
             cfg = f"--psm {psm} -c tessedit_char_whitelist=0123456789"
@@ -512,16 +530,60 @@ def _ocr_from_roi(roi: np.ndarray, expected_digits: int = 3) -> Optional[str]:
                 # Common case on fresh systems: Tesseract binary not installed
                 txt = ""
             run = _best_digit_run(txt)
-            if len(run) > len(best):
-                best = run
+            if run and len(run) >= expected_digits - 1:  # Allow off-by-one
+                candidates.append(run)
 
-    if expected_digits and len(best) == expected_digits:
-        return best
-    if best:
-        return best
+    # Return best Tesseract result if we have exact match
+    if candidates:
+        # Prefer exact length match
+        exact = [c for c in candidates if len(c) == expected_digits]
+        if exact:
+            return exact[0]
+        # Otherwise return longest
+        return max(candidates, key=len)
 
-    # 2) Fallback: template matching (no external binaries)
-    return _group_and_read_digits(roi, expected_digits=expected_digits)
+    # 2) Fallback: template matching (no external binaries required)
+    result = _group_and_read_digits(roi, expected_digits=expected_digits)
+    if result:
+        return result
+    
+    # 3) Final fallback: try template matching with even more relaxed digits
+    # This handles cases where some digit variants don't match well
+    if roi.size > 0:
+        r = cv2.resize(roi, None, fx=5.0, fy=5.0, interpolation=cv2.INTER_CUBIC)
+        r = cv2.GaussianBlur(r, (3, 3), 0)
+        _, bin_inv = cv2.threshold(r, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        cnts, _ = cv2.findContours(bin_inv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if cnts:
+            H, W = bin_inv.shape[:2]
+            comps = []
+            for c in cnts:
+                x, y, w, h = cv2.boundingRect(c)
+                if w * h < 150:  # Lower threshold for small digits
+                    continue
+                if h < 0.10 * H or h > 1.0 * H:
+                    continue
+                if w < 0.01 * W or w > 0.50 * W:
+                    continue
+                ar = w / float(h)
+                if not (0.10 <= ar <= 1.50):  # Very relaxed aspect ratio
+                    continue
+                comps.append((x, y, w, h))
+            
+            if len(comps) >= expected_digits:
+                comps = sorted(comps, key=lambda b: b[0])
+                for i in range(len(comps) - expected_digits + 1):
+                    group = comps[i:i + expected_digits]
+                    out = ""
+                    for (x, y, w, h) in group:
+                        digit = bin_inv[y:y + h, x:x + w]
+                        d = _template_match_digit(digit, min_conf=0.08)  # Very relaxed
+                        if d is not None:
+                            out += str(d)
+                    if len(out) == expected_digits:
+                        return out
+    
+    return None
 
 
 
@@ -554,63 +616,81 @@ def _crop_by_layout(warped_gray: np.ndarray, layout: Dict[str, Any], pad_frac: f
 
 
 def _crop_fallback(warped_gray: np.ndarray) -> Optional[np.ndarray]:
-    """Fallback crop: upper-left region where 'Student ID: ...' is printed."""
+    """Fallback crop: upper-left region where 'Student ID: ...' is typically printed.
+    
+    Uses a larger region to ensure we capture the ID even if positioning varies.
+    """
     Hc, Wc = warped_gray.shape[:2]
-    x1, y1 = 0, int(0.06 * Hc)
-    x2, y2 = int(0.55 * Wc), int(0.35 * Hc)
+    x1, y1 = 0, int(0.04 * Hc)  # Start slightly higher
+    x2, y2 = int(0.65 * Wc), int(0.38 * Hc)  # Extend slightly wider and taller
     roi = warped_gray[y1:y2, x1:x2]
     return roi if roi.size else None
 
 
 def ocr_student_id(warped_gray: np.ndarray, layout: Dict[str, Any], expected_digits: int = 3) -> Optional[str]:
-    """OCR student ID from the warped scan."""
-    candidates: List[str] = []
+    """OCR student ID from the warped scan with multiple robust strategies."""
+    candidates: List[Tuple[str, str]] = []  # (value, source)
 
+    # Try crop using layout.json's precise student_id_print box (most reliable)
     roi1 = _crop_by_layout(warped_gray, layout, pad_frac=0.35)
     if roi1 is not None:
         r = _ocr_from_roi(roi1, expected_digits)
         if r:
-            candidates.append(r)
+            candidates.append((r, "layout_crop"))
 
+    # Try fallback crop of upper-left region
     roi2 = _crop_fallback(warped_gray)
     if roi2 is not None:
         r = _ocr_from_roi(roi2, expected_digits)
         if r:
-            candidates.append(r)
+            candidates.append((r, "fallback_crop"))
 
     if not candidates:
         return None
 
-    # Choose candidate that best matches expected digit length; otherwise longest.
+    # Prefer candidates that match expected digit length, otherwise pick longest
     def score(s: str) -> Tuple[int, int]:
-        # higher is better
+        # higher is better: (length_match, actual_length)
         length = len(s)
         length_match = 1 if (expected_digits and length == expected_digits) else 0
         return (length_match, length)
 
-    best = max(candidates, key=score)
-    return best
+    best = max(candidates, key=lambda c: score(c[0]))
+    return best[0]
 
 
 def ocr_student_id_from_raw(gray: np.ndarray, expected_digits: int = 3) -> Optional[str]:
-    """Last-resort OCR directly on the unwarped scan.
+    """Last-resort OCR directly on the unwarped scan image.
 
     This helps if the perspective warp failed (e.g., because marker->dst mapping was wrong).
-    We crop a generous top-left band where the Student ID is typically printed.
+    We try multiple crop regions where the Student ID is typically printed.
     """
     H, W = gray.shape[:2]
-    x1, y1 = 0, int(0.04 * H)
-    x2, y2 = int(0.65 * W), int(0.30 * H)
-    roi = gray[y1:y2, x1:x2]
-    if roi.size == 0:
+    candidates: List[str] = []
+    
+    # Try main region where ID is typically printed
+    regions = [
+        (0, int(0.04 * H), int(0.70 * W), int(0.35 * H)),  # Large upper-left region
+        (0, int(0.02 * H), int(0.60 * W), int(0.30 * H)),  # Slightly higher
+        (int(0.1*W), int(0.08 * H), int(0.75 * W), int(0.32 * H)),  # Slightly inset
+    ]
+    
+    for x1, y1, x2, y2 in regions:
+        roi = gray[y1:y2, x1:x2]
+        if roi.size == 0:
+            continue
+        r = _ocr_from_roi(roi, expected_digits)
+        if r and len(r) >= expected_digits - 1:
+            candidates.append(r)
+    
+    if not candidates:
         return None
-    r = _ocr_from_roi(roi, expected_digits)
-    if not r:
-        return None
-    # Prefer exact-length runs if possible
-    if expected_digits and r.isdigit():
-        return r
-    return r
+    
+    # Prefer exact-length match, otherwise longest
+    exact = [c for c in candidates if len(c) == expected_digits]
+    if exact:
+        return exact[0]
+    return max(candidates, key=len) if candidates else None
 
 
 def infer_student_id_from_filename(image_path: str) -> str:

@@ -226,7 +226,7 @@ def render_sheet(path, layout, student_id, fill_solution,
             qlabel = f"{prefix_str}.{q}"
         else:
             qlabel = str(q)
-        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"Q {qlabel}")
+        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"Frage {qlabel}")
 
         c.setFont("Times-Roman", 12)
         labels = option_labels(layout["per_question_option_counts"][q - 1])
@@ -433,7 +433,6 @@ def main():
         help="Prefix to prepend to question numbers (e.g. 'A' or '1')."
     )
 
-    # New cover-sheet flags
     ap.add_argument("--cover-tex", default=None,
                     help="Path to a LaTeX BODY file (no documentclass/begin{document}) to embed on the cover sheet.")
     ap.add_argument("--cover-title", default="Exam paper",
