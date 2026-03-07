@@ -38,7 +38,7 @@ python3 generate_answer_sheets.py \ \
 --outdir answer_sheets
 
 ### B - Scan and grade answer sheets
-1) scan and merge (if not default) answer sheets into ONE single multi-page .pdf file.
+1) scan and merge (if not default) answer sheets into ONE single multi-page .pdf file. The Student-ID order in the scan does NOT matter.
 2) Place "scanned_answer_sheets.pdf" in folder "scans" which was created in Step A.
 3) Beforehand, execute "python3 grade_answer_sheets.py --help" to get an overview and description of all arguments to be passed.
 4) run "python3 grade_answer_sheets.py" with respective arguments (experiment with example below).
