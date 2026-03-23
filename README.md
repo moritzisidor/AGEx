@@ -50,7 +50,7 @@ python3 grade_answer_sheets.py \ \
 --scans scans/scanned_answer_sheets.pdf \ \
 --student-id-start 1 \ \
 --student-id-count 4 \ \
---ambiguity-margin 0.5 \ \
+--ambiguity-margin 0.3 \ \
 --out results.csv
 
 
