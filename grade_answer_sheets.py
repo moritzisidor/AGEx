@@ -844,8 +844,8 @@ def main() -> None:
     ap.add_argument("--out", default="results.csv", help="Output CSV path")
     ap.add_argument("--fill-threshold", type=float, default=0.18,
                     help="Min fill ratio to accept a marked box range: (0,1) \n default: 0.18")
-    ap.add_argument("--ambiguity-margin", type=float, default=0.06,
-                    help="Min difference between top-2 ratios to accept as unambiguous range: (0,1). \n default: 0.06")
+    ap.add_argument("--ambiguity-margin", type=float, default=0.2,
+                    help="Min difference between top two fill levels (of all boxes of one answer) to accept as unambiguous. If difference < ambiguity-margin, the answer is flagged as invalid. range: (0,1). \n default: 0.2")
     ap.add_argument("--student-id-start", type=int, default=None,
                     help="First expected student ID (inclusive). If provided with --student-id-count, missing sheets are written as NA. (not needed if student-names-csv is provided)")
     ap.add_argument("--student-id-count", type=int, default=None,
