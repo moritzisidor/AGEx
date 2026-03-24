@@ -844,11 +844,11 @@ def main() -> None:
     ap.add_argument("--ambiguity-margin", type=float, default=0.06,
                     help="Min difference between top-2 ratios to accept as unambiguous range: (0,1). \n default: 0.06")
     ap.add_argument("--student-id-start", type=int, default=None,
-                    help="First expected student ID (inclusive). If provided with --student-id-count, missing sheets are written as NA.")
+                    help="First expected student ID (inclusive). If provided with --student-id-count, missing sheets are written as NA. (not needed if student-names-csv is provided)")
     ap.add_argument("--student-id-count", type=int, default=None,
-                    help="Number of expected student IDs. If provided with --student-id-start, missing sheets are written as NA.")
+                    help="Number of expected student IDs. If provided with --student-id-start, missing sheets are written as NA. (not needed if student-names-csv is provided)")
     ap.add_argument("--student-names-csv", default=None,
-                    help="Path to CSV file with student names. One name per row or comma-separated values. Names are paired with student IDs in order.")
+                    help="Path to CSV file with student names. One name per row or comma-separated values. Names are paired with student IDs starting from 1. When provided, --student-id-start and --student-id-count are not required.")
     args = ap.parse_args()
 
     layout = load_layout(args.layout)
@@ -875,8 +875,8 @@ def main() -> None:
                 sid = str(start_id + i).zfill(sid_digits)
                 student_names[sid] = nm
         else:
-            # If no student-id-start provided, just enumerate from 0
-            for i, nm in enumerate(names_list):
+            # If no student-id-start provided, just enumerate from 1
+            for i, nm in enumerate(names_list, start=1):
                 sid = str(i).zfill(sid_digits)
                 student_names[sid] = nm
 

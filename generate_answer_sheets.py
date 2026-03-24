@@ -469,11 +469,11 @@ def main():
     ap.add_argument("--box-size-mm", type=float, default=3.5,
                     help="Checkbox size in millimeters (default: 3.5mm)")
     ap.add_argument("--student-id-start", type=int, default=1,
-                    help="Starting student ID number (used when --student-names-csv is not provided)")
+                    help="Starting student ID number (not needed if student-names-csv is provided)")
     ap.add_argument("--student-id-count", type=int, default=1,
-                    help="Number of incremental student IDs to generate (used when --student-names-csv is not provided)")
+                    help="Number of incremental student IDs to generate (not needed if student-names-csv is provided)")
     ap.add_argument("--student-names-csv", default=None,
-                    help="Path to CSV file with student names (overrides student ID range). One name per row or comma-separated values.")
+                    help="Path to CSV file with student names. One name per row or comma-separated values. Names are paired with student IDs starting from 1. When provided, --student-id-start and --student-id-count are not required.")
     ap.add_argument("--answer-key", required=True)
     ap.add_argument("--outdir", default="out")
     ap.add_argument(
