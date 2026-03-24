@@ -41,7 +41,8 @@ python3 generate_answer_sheets.py \ \
 2) Place "scanned_answer_sheets.pdf" in folder "scans" which was created in Step A.
 3) Beforehand, execute "python3 grade_answer_sheets.py --help" to get an overview and description of all arguments to be passed.
 4) run "python3 grade_answer_sheets.py" with respective arguments (experiment with example below).
-5) *Output:* Student individual results in results.csv
+5) Crucial: A higher ambiguity margin corresponds to a more strict detection of invalid answers (multiple boxes filled in one answer).
+6) *Output:* Student individual results in results.csv
 
 **Example (command line prompt):**\
 python3 grade_answer_sheets.py \ \
