@@ -26,13 +26,13 @@ python3 generate_answer_sheets.py \ \
 --exam-date "01. Januar 2000" \ \
 --num-questions 24 \ \
 --options-list 2,2,5,5,3,5,2,3,4,4,5,2,2,2,2,5,2,3,2,3,3,2,2,5 \ \
+--answer-key A,A,D,C,A,D,A,B,D,C,C,B,A,A,B,C,B,C,B,C,A,B,A,E \ \
 --columns 5 \ \
 --force-columns \ \
 --row-gap-mm 4 \ \
 --col-gap-mm 14 \ \
 --box-size-mm 3.5 \ \
 --student-names-csv student_names.csv \ \
---answer-key A,A,D,C,A,D,A,B,D,C,C,B,A,A,B,C,B,C,B,C,A,B,A,E \ \
 --cover-tex exam_instructions.tex \ \
 --outdir answer_sheets
 
