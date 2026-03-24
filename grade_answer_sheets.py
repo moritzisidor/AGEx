@@ -11,15 +11,18 @@ Key features
   - Uses layout.json's student_id_print box when available
   - Uses robust fallbacks and multiple preprocessing variants
   - Falls back to filename digits only if OCR fails
-- Supports "expected roster" via --student-id-start + --student-id-count:
+- Supports "expected roster" via --student-id-start + --student-id-count or --student-names-csv:
   - If a student's sheet is missing, writes a row with NA values
 
 Dependencies:
   pip install opencv-python numpy pytesseract
 
 Usage:
-  python3 grade_answer_sheets_pdf.py --layout Quiz_out/layout.json --pdf scans --out results.csv \
+  python3 grade_answer_sheets_pdf.py --layout Quiz_out/layout.json --scans scans --out results.csv \
       --student-id-start 1 --student-id-count 10
+  # Or alternatively:
+  python3 grade_answer_sheets_pdf.py --layout Quiz_out/layout.json --scans scans --out results.csv \
+      --student-names-csv student_names.csv
 """
 from __future__ import annotations
 

@@ -13,13 +13,14 @@ What it does
 - Optionally renders cover sheets by compiling a LaTeX wrapper that \\input{}'s a
   user-maintained .tex content file.
 - Merges the per-student PDFs into combined PDFs.
+- Supports student names via --student-names-csv (alternative to --student-id-start + --student-id-count).
 
 Requirements (for cover sheets)
 - A working LaTeX installation that provides 'pdflatex' (e.g., MacTeX).
 - Python package 'pypdf' (preferred) or 'PyPDF2' for merging (optional).
   If not installed, you can still generate separate PDFs.
 
-For usage check 
+For usage check --help
 
 
 """
