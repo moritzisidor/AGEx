@@ -31,8 +31,7 @@ python3 generate_answer_sheets.py \ \
 --row-gap-mm 4 \ \
 --col-gap-mm 14 \ \
 --box-size-mm 3.5 \ \
---student-id-start 1 \ \
---student-id-count 4 \ \
+--student-names-csv student_names.csv \ \
 --answer-key A,A,D,C,A,D,A,B,D,C,C,B,A,A,B,C,B,C,B,C,A,B,A,E \ \
 --cover-tex exam_instructions.tex \ \
 --outdir answer_sheets
@@ -48,8 +47,7 @@ python3 generate_answer_sheets.py \ \
 python3 grade_answer_sheets.py \ \
 --layout answer_sheets/layout.json \ \
 --scans scans/scanned_answer_sheets.pdf \ \
---student-id-start 1 \ \
---student-id-count 4 \ \
+--student-names-csv student_names.csv \ \
 --ambiguity-margin 0.3 \ \
 --out results.csv
 
