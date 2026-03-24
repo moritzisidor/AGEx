@@ -847,10 +847,38 @@ def main() -> None:
                     help="First expected student ID (inclusive). If provided with --student-id-count, missing sheets are written as NA.")
     ap.add_argument("--student-id-count", type=int, default=None,
                     help="Number of expected student IDs. If provided with --student-id-start, missing sheets are written as NA.")
+    ap.add_argument("--student-names-csv", default=None,
+                    help="Path to CSV file with student names. One name per row or comma-separated values. Names are paired with student IDs in order.")
     args = ap.parse_args()
 
     layout = load_layout(args.layout)
     sid_digits = int(layout.get("student_id_digits") or 3)
+
+    # Load student names if provided
+    student_names: Dict[str, str] = {}
+    if args.student_names_csv:
+        if not os.path.exists(args.student_names_csv):
+            raise FileNotFoundError(f"--student-names-csv not found: {args.student_names_csv}")
+        names_list: List[str] = []
+        with open(args.student_names_csv, newline="", encoding="utf-8-sig") as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                for cell in row:
+                    nm = cell.strip()
+                    if nm:
+                        names_list.append(nm)
+        
+        # Map names to student IDs based on order
+        if args.student_id_start is not None:
+            start_id = args.student_id_start
+            for i, nm in enumerate(names_list):
+                sid = str(start_id + i).zfill(sid_digits)
+                student_names[sid] = nm
+        else:
+            # If no student-id-start provided, just enumerate from 0
+            for i, nm in enumerate(names_list):
+                sid = str(i).zfill(sid_digits)
+                student_names[sid] = nm
 
     pages = load_pdf_pages(args.scans, dpi=300)
     if not pages:
@@ -916,6 +944,13 @@ def main() -> None:
         pass
     if args.student_id_start is not None and args.student_id_count is not None:
         expected_ids = [str(i).zfill(sid_digits) for i in range(args.student_id_start, args.student_id_start + args.student_id_count)]
+    elif student_names:
+        def _sort_key(s: str):
+            try:
+                return (0, int(s))
+            except Exception:
+                return (1, s)
+        expected_ids = sorted(student_names.keys(), key=_sort_key)
     else:
         def _sort_key(s: str):
             try:
@@ -942,21 +977,39 @@ def main() -> None:
                 "error": "missing_sheet",
             })
 
-    with open(args.out, "w", newline="", encoding="utf-8") as f:
+    with open(args.out, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        w.writerow(["student_id", "total questions", "correct", "wrong", "blanks", "invalid", "score %", "error"])
-        for r in rows:
-            sp = r.get("score %", "")
-            w.writerow([
-                r.get("student_id", ""),
-                r.get("total questions", ""),
-                r.get("correct", ""),
-                r.get("wrong", ""),
-                r.get("blanks", ""),
-                r.get("invalid", ""),
-                f"{sp:.2f}" if isinstance(sp, (float, int)) else (sp if isinstance(sp, str) else ""),
-                r.get("error", ""),
-            ])
+        if student_names:
+            w.writerow(["name", "student_id", "total questions", "correct", "wrong", "blanks", "invalid", "score %", "error"])
+            for r in rows:
+                sp = r.get("score %", "")
+                sid = r.get("student_id", "")
+                name = student_names.get(sid, "")
+                w.writerow([
+                    name,
+                    sid,
+                    r.get("total questions", ""),
+                    r.get("correct", ""),
+                    r.get("wrong", ""),
+                    r.get("blanks", ""),
+                    r.get("invalid", ""),
+                    f"{sp:.2f}" if isinstance(sp, (float, int)) else (sp if isinstance(sp, str) else ""),
+                    r.get("error", ""),
+                ])
+        else:
+            w.writerow(["student_id", "total questions", "correct", "wrong", "blanks", "invalid", "score %", "error"])
+            for r in rows:
+                sp = r.get("score %", "")
+                w.writerow([
+                    r.get("student_id", ""),
+                    r.get("total questions", ""),
+                    r.get("correct", ""),
+                    r.get("wrong", ""),
+                    r.get("blanks", ""),
+                    r.get("invalid", ""),
+                    f"{sp:.2f}" if isinstance(sp, (float, int)) else (sp if isinstance(sp, str) else ""),
+                    r.get("error", ""),
+                ])
 
     print(f"Wrote {args.out} ({len(rows)} rows).")
     if ocr_fail_files:

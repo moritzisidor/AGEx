@@ -25,7 +25,7 @@ For usage check
 """
 from __future__ import annotations
 
-import argparse, json, os, string, math, shutil, tempfile, subprocess
+import argparse, csv, json, os, string, math, shutil, tempfile, subprocess
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 from datetime import date
@@ -37,6 +37,47 @@ from reportlab.lib.units import mm
 from reportlab.lib import colors
 
 PAPERS = {"A4": A4, "LETTER": letter}
+
+# ----------------------------
+# Unicode font setup for German Umlaute (ä, ö, ü)
+# ----------------------------
+def _get_umlaut_font():
+    """Try to find a TrueType font that supports German umlauts. Returns font name or None."""
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import sys
+        
+        # Font search paths for DejaVuSans (supports ä, ö, ü)
+        font_paths = [
+            "/System/Library/Fonts/DejaVuSans.ttf",  # macOS
+            "/opt/homebrew/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # macOS Homebrew
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+            "/usr/local/share/fonts/DejaVuSans.ttf",  # Linux
+        ]
+        
+        # Windows paths
+        if sys.platform == "win32":
+            windir = os.environ.get("WINDIR", "C:\\Windows")
+            font_paths.extend([
+                os.path.join(windir, "Fonts", "DejaVuSans.ttf"),
+                "C:\\Windows\\Fonts\\DejaVuSans.ttf",
+            ])
+        
+        # Try to register the font
+        for font_path in font_paths:
+            if os.path.exists(font_path):
+                try:
+                    pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
+                    return "DejaVuSans"
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return None
+
+# Try to setup unicode font on module load
+_UNICODE_FONT = _get_umlaut_font()
 
 # ----------------------------
 # Original helper functions (unchanged)
@@ -166,7 +207,7 @@ def compute_layout(paper, title, num_questions, per_q_counts,
         "answer_key": [],
     }
 
-def render_sheet(path, layout, student_id, fill_solution,
+def render_sheet(path, layout, student_id=None, student_name=None, fill_solution=False,
                  course_name="", professor="", exam_date=""):
 
     W, H = PAPERS[layout["paper"]]
@@ -203,10 +244,17 @@ def render_sheet(path, layout, student_id, fill_solution,
     c.setFont("Times-Bold", 26)
     c.drawCentredString(W / 2, title_y, layout["title"])
 
-    # Student ID under title (left)
+    # Student ID under title (left) / Student name under title (right)
+    c.setFont("Times-Bold", 14)
     if student_id:
-        c.setFont("Times-Bold", 14)
         c.drawString(margin, title_y - 18, f"Student ID: {student_id}")
+    if student_name:
+        # Use Unicode font for names to support ä, ö, ü
+        if _UNICODE_FONT:
+            c.setFont(_UNICODE_FONT, 14)
+        else:
+            c.setFont("Times-Bold", 14)
+        c.drawRightString(W - margin, title_y - 18, f"{student_name}")
 
     # ---- QUESTIONS / BOXES ----
     boxes_by_q: Dict[int, List[Dict[str, Any]]] = {}
@@ -273,7 +321,6 @@ _LATEX_WRAPPER = r"""
 \newcommand{\CourseName}{%(course)s}
 \newcommand{\Professor}{%(prof)s}
 \newcommand{\ExamDate}{%(date)s}
-\newcommand{\StudentID}{%(sid)s}
 \newcommand{\CoverTitle}{%(cover_title)s}
 
 \begin{document}
@@ -287,7 +334,7 @@ _LATEX_WRAPPER = r"""
 \vspace{0.5cm}
 
 \noindent
-\Large \textbf{\CoverTitle} \hfill \Large \textbf{Student-ID:} \Large \StudentID
+\Large \textbf{\CoverTitle}
 \normalsize
 
 \vspace{0.8cm}
@@ -326,7 +373,6 @@ def compile_cover_pdf(
     course_name: str,
     professor: str,
     exam_date: str,
-    student_id: str,
     cover_title: str = "Exam paper",
 ) -> None:
     """
@@ -359,7 +405,6 @@ def compile_cover_pdf(
             "course": _latex_escape(course_name),
             "prof": _latex_escape(professor),
             "date": _latex_escape(exam_date),
-            "sid": _latex_escape(student_id),
             "cover_title": _latex_escape(cover_title),
         }
         (td_path / "cover_wrapper.tex").write_text(tex, encoding="utf-8")
@@ -423,8 +468,12 @@ def main():
     ap.add_argument("--col-gap-mm", type=float, default=0.0)
     ap.add_argument("--box-size-mm", type=float, default=3.5,
                     help="Checkbox size in millimeters (default: 3.5mm)")
-    ap.add_argument("--student-id-start", type=int, default=1)
-    ap.add_argument("--student-id-count", type=int, default=1)
+    ap.add_argument("--student-id-start", type=int, default=1,
+                    help="Starting student ID number (used when --student-names-csv is not provided)")
+    ap.add_argument("--student-id-count", type=int, default=1,
+                    help="Number of incremental student IDs to generate (used when --student-names-csv is not provided)")
+    ap.add_argument("--student-names-csv", default=None,
+                    help="Path to CSV file with student names (overrides student ID range). One name per row or comma-separated values.")
     ap.add_argument("--answer-key", required=True)
     ap.add_argument("--outdir", default="out")
     ap.add_argument(
@@ -509,6 +558,21 @@ def main():
     with open(os.path.join(args.outdir, "layout.json"), "w", encoding="utf-8") as f:
         json.dump(layout, f, indent=2)
 
+    # Build student definitions (names take precedence over IDs)
+    student_names = []
+    if args.student_names_csv:
+        if not Path(args.student_names_csv).exists():
+            raise FileNotFoundError(f"--student-names-csv not found: {args.student_names_csv}")
+        with open(args.student_names_csv, newline="", encoding="utf-8-sig") as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                for cell in row:
+                    nm = cell.strip()
+                    if nm:
+                        student_names.append(nm)
+        if not student_names:
+            raise ValueError("--student-names-csv did not contain any student names")
+
     # Solution sheet
     render_sheet(
         os.path.join(args.outdir, "answer_sheet_solution.pdf"),
@@ -520,29 +584,36 @@ def main():
         exam_date=args.exam_date,
     )
 
-    # Student sheets + optional covers
+    # Student sheets + optional cover
     do_cover = (args.cover_tex is not None) and (not args.no_cover)
 
     if args.cover_tex is not None and not Path(args.cover_tex).exists():
         raise FileNotFoundError(f"--cover-tex not found: {args.cover_tex}")
 
     # We build combined PDFs by first creating per-student PDFs and then merging.
-    # (This keeps the rendering functions unchanged and works well with ReportLab + LaTeX.)
     tmp_dir_ctx = tempfile.TemporaryDirectory(prefix="sheets_", dir=str(Path(args.outdir).resolve()))
     tmp_dir = Path(tmp_dir_ctx.name)
 
     answer_paths: List[str] = []
-    cover_paths: List[str] = []
 
-    for sid_int in range(args.student_id_start, args.student_id_start + args.student_id_count):
-        sid = f"{sid_int:03d}"
+    if student_names:
+        student_iter = [
+            (f"{(args.student_id_start + i - 1):03d}", nm, f"{(args.student_id_start + i - 1):03d}")
+            for i, nm in enumerate(student_names, start=1)
+        ]
+    else:
+        student_iter = [
+            (f"{sid_int:03d}", None, f"{sid_int:03d}")
+            for sid_int in range(args.student_id_start, args.student_id_start + args.student_id_count)
+        ]
 
-        # Intermediate per-student answer sheet
-        ans_pdf_tmp = tmp_dir / f"answer_sheet_{sid}.pdf"
+    for student_id, student_name, student_key in student_iter:
+        ans_pdf_tmp = tmp_dir / f"answer_sheet_{student_key}.pdf"
         render_sheet(
             str(ans_pdf_tmp),
             layout,
-            student_id=sid,
+            student_id=student_id,
+            student_name=student_name,
             fill_solution=False,
             course_name=args.course_name,
             professor=args.professor,
@@ -550,31 +621,26 @@ def main():
         )
         answer_paths.append(str(ans_pdf_tmp))
 
-        # Intermediate per-student cover sheet (optional)
-        if do_cover:
-            cover_pdf_tmp = tmp_dir / f"cover_sheet_{sid}.pdf"
-            compile_cover_pdf(
-                out_pdf=str(cover_pdf_tmp),
-                cover_content_path=args.cover_tex,
-                course_name=args.course_name,
-                professor=args.professor,
-                exam_date=args.exam_date,
-                student_id=sid,
-                cover_title=args.cover_title,
-            )
-            cover_paths.append(str(cover_pdf_tmp))
-
-        # Optionally keep per-student outputs in outdir
         if args.per_student:
-            shutil.copyfile(ans_pdf_tmp, os.path.join(args.outdir, f"answer_sheet_{sid}.pdf"))
-            if do_cover and cover_paths:
-                shutil.copyfile(cover_paths[-1], os.path.join(args.outdir, f"cover_sheet_{sid}.pdf"))
+            shutil.copyfile(ans_pdf_tmp, os.path.join(args.outdir, f"answer_sheet_{student_key}.pdf"))
 
     # Combined PDFs
     if answer_paths:
         merge_pdfs(os.path.join(args.outdir, "answer_sheets_all.pdf"), answer_paths)
-    if do_cover and cover_paths:
-        merge_pdfs(os.path.join(args.outdir, "cover_sheets_all.pdf"), cover_paths)
+
+    if do_cover:
+        cover_pdf_tmp = tmp_dir / "cover_sheet.pdf"
+        compile_cover_pdf(
+            out_pdf=str(cover_pdf_tmp),
+            cover_content_path=args.cover_tex,
+            course_name=args.course_name,
+            professor=args.professor,
+            exam_date=args.exam_date,
+            cover_title=args.cover_title,
+        )
+        if args.per_student:
+            shutil.copyfile(str(cover_pdf_tmp), os.path.join(args.outdir, "cover_sheet.pdf"))
+        merge_pdfs(os.path.join(args.outdir, "cover_sheets_all.pdf"), [str(cover_pdf_tmp)])
 
     # Cleanup intermediate files unless requested
     if args.keep_temp:
