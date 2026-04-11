@@ -209,7 +209,7 @@ def compute_layout(paper, title, num_questions, per_q_counts,
     }
 
 def render_sheet(path, layout, student_id=None, student_name=None, fill_solution=False,
-                 course_name="", professor="", exam_date=""):
+                 course_name="", professor="", exam_date="", prefix_header_only=False):
 
     W, H = PAPERS[layout["paper"]]
     c = canvas.Canvas(path, pagesize=(W, H))
@@ -242,13 +242,18 @@ def render_sheet(path, layout, student_id=None, student_name=None, fill_solution
 
     # ---- TITLE BAND ----
     title_y = rule_y - 28
+    header_prefix = layout.get("question_prefix", "") if prefix_header_only else ""
+    title_text = layout["title"]
+    if header_prefix:
+        title_text = f"{title_text} – {header_prefix}"
     c.setFont("Times-Bold", 26)
-    c.drawCentredString(W / 2, title_y, layout["title"])
+    c.drawCentredString(W / 2, title_y, title_text)
 
     # Student ID under title (left) / Student name under title (right)
     c.setFont("Times-Bold", 14)
     if student_id:
         c.drawString(margin, title_y - 18, f"Student ID: {student_id}")
+
     if student_name:
         # Use Unicode font for names to support ä, ö, ü
         if _UNICODE_FONT:
@@ -270,7 +275,7 @@ def render_sheet(path, layout, student_id=None, student_name=None, fill_solution
 
         c.setFont("Times-Bold", 14)
         prefix = layout.get("question_prefix", "")
-        if prefix:
+        if prefix and not prefix_header_only:
             prefix_str = str(prefix).rstrip(".")
             qlabel = f"{prefix_str}.{q}"
         else:
@@ -368,6 +373,28 @@ def _latex_escape(s: str) -> str:
         out.append(repl.get(ch, ch))
     return "".join(out)
 
+def _strip_cover_fields(tex_content: str) -> str:
+    """Remove Name/Vorname, Klasse, and Unterschrift field lines from LaTeX content.
+
+    Strips \\textbf{Name, Vorname:}, \\textbf{Klasse:}, \\textbf{Unterschrift:}
+    blocks including surrounding \\noindent, \\vspace, and \\rule lines.
+    """
+    import re
+    # Remove blocks like:
+    #   \vspace{...}
+    #   \noindent
+    #   \textbf{Name, Vorname:} \rule{...}{...}
+    # Each field may be preceded by \vspace and \noindent on separate lines.
+    pattern = (
+        r'(?:\\vspace\{[^}]*\}\s*\n)?'        # optional \vspace line before
+        r'\\noindent\s*\n'                      # \noindent line
+        r'\\textbf\{(?:Name,\s*Vorname|Klasse|Unterschrift):?\}'
+        r'[^\n]*\n'                             # rest of that line (\rule etc.)
+        r'(?:\s*\n)?'                           # optional blank line after
+    )
+    return re.sub(pattern, '', tex_content)
+
+
 def compile_cover_pdf(
     out_pdf: str,
     cover_content_path: str,
@@ -375,6 +402,7 @@ def compile_cover_pdf(
     professor: str,
     exam_date: str,
     cover_title: str = "Exam paper",
+    no_cover_fields: bool = False,
 ) -> None:
     """
     Compile a LaTeX cover PDF that inputs `cover_content_path` as cover_content.tex.
@@ -392,8 +420,13 @@ def compile_cover_pdf(
     with tempfile.TemporaryDirectory(prefix="covertex_") as td:
         td_path = Path(td)
 
-        # Copy user content into temp dir with fixed name
-        shutil.copyfile(cover_content_path, td_path / "cover_content.tex")
+        # Copy user content into temp dir, optionally stripping field lines
+        if no_cover_fields:
+            content = Path(cover_content_path).read_text(encoding="utf-8")
+            content = _strip_cover_fields(content)
+            (td_path / "cover_content.tex").write_text(content, encoding="utf-8")
+        else:
+            shutil.copyfile(cover_content_path, td_path / "cover_content.tex")
 
         # Copy guidelines PDF asset if present next to the cover content
         guidelines_name = "single_choice_selection_guidelines.pdf"
@@ -482,6 +515,16 @@ def main():
         default=None,
         help="Prefix to prepend to question numbers (e.g. 'A' or '1')."
     )
+    ap.add_argument(
+        "--prefix-header-only",
+        action="store_true",
+        help=(
+            "When set, the answer-sheet prefix (e.g. 'A') is displayed only "
+            "between the Student ID and the Student Name in the header line, "
+            "NOT as a prefix of each question label. Without this flag the "
+            "prefix appears on every question (e.g. 'Frage A.1')."
+        ),
+    )
 
     ap.add_argument("--cover-tex", default=None,
                     help="Path to a LaTeX BODY file (no documentclass/begin{document}) to embed on the cover sheet.")
@@ -489,6 +532,8 @@ def main():
                     help="Label printed next to the Student-ID on the cover sheet.")
     ap.add_argument("--no-cover", action="store_true",
                     help="Disable cover sheet generation even if --cover-tex is provided.")
+    ap.add_argument("--no-cover-fields", action="store_true",
+                    help="Remove the Name/Vorname, Klasse, and Unterschrift lines from the cover sheet.")
 
     # Output control
     ap.add_argument(
@@ -547,8 +592,12 @@ def main():
     else:
         layout["question_prefix"] = ""
 
+    # Store whether the prefix should appear only in the header (between ID and name)
+    layout["prefix_header_only"] = bool(args.prefix_header_only)
+
     # If a prefix was provided, append it to the printable title (e.g. "Title - A")
-    if layout.get("question_prefix"):
+    # but only when the prefix is NOT header-only (header-only puts it in the ID line)
+    if layout.get("question_prefix") and not args.prefix_header_only:
         layout["title"] = f"{layout.get('title', '')} - {layout['question_prefix']}"
 
     # Validate answer key indices against per-question option counts
@@ -583,6 +632,7 @@ def main():
         course_name=args.course_name,
         professor=args.professor,
         exam_date=args.exam_date,
+        prefix_header_only=args.prefix_header_only,
     )
 
     # Student sheets + optional cover
@@ -619,6 +669,7 @@ def main():
             course_name=args.course_name,
             professor=args.professor,
             exam_date=args.exam_date,
+            prefix_header_only=args.prefix_header_only,
         )
         answer_paths.append(str(ans_pdf_tmp))
 
@@ -631,13 +682,20 @@ def main():
 
     if do_cover:
         cover_pdf_tmp = tmp_dir / "cover_sheet.pdf"
+        # Append the answer-sheet prefix to the cover title if one was provided
+        effective_cover_title = args.cover_title
+        prefix = layout.get("question_prefix", "")
+        if prefix:
+            effective_cover_title = f"{args.cover_title} – {prefix}"
+
         compile_cover_pdf(
             out_pdf=str(cover_pdf_tmp),
             cover_content_path=args.cover_tex,
             course_name=args.course_name,
             professor=args.professor,
             exam_date=args.exam_date,
-            cover_title=args.cover_title,
+            cover_title=effective_cover_title,
+            no_cover_fields=args.no_cover_fields,
         )
         if args.per_student:
             shutil.copyfile(str(cover_pdf_tmp), os.path.join(args.outdir, "cover_sheet.pdf"))
