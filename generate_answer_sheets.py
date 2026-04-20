@@ -209,7 +209,8 @@ def compute_layout(paper, title, num_questions, per_q_counts,
     }
 
 def render_sheet(path, layout, student_id=None, student_name=None, fill_solution=False,
-                 course_name="", professor="", exam_date="", prefix_header_only=False):
+                 course_name="", professor="", exam_date="", prefix_header_only=False,
+                 question_label="Frage"):
 
     W, H = PAPERS[layout["paper"]]
     c = canvas.Canvas(path, pagesize=(W, H))
@@ -280,7 +281,7 @@ def render_sheet(path, layout, student_id=None, student_name=None, fill_solution
             qlabel = f"{prefix_str}.{q}"
         else:
             qlabel = str(q)
-        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"Frage {qlabel}")
+        c.drawString(first["x_pt"], first["y_pt"] + first["h_pt"] + 2.5 * mm, f"{question_label} {qlabel}")
 
         c.setFont("Times-Roman", 12)
         labels = option_labels(layout["per_question_option_counts"][q - 1])
@@ -526,6 +527,9 @@ def main():
         ),
     )
 
+    ap.add_argument("--question-label", default="Frage",
+                    help="Label printed before each question number (default: 'Frage'). "
+                         "Use 'Question' for English sheets.")
     ap.add_argument("--cover-tex", default=None,
                     help="Path to a LaTeX BODY file (no documentclass/begin{document}) to embed on the cover sheet.")
     ap.add_argument("--cover-title", default="Exam paper",
@@ -636,6 +640,7 @@ def main():
         professor=args.professor,
         exam_date=args.exam_date,
         prefix_header_only=args.prefix_header_only,
+        question_label=args.question_label,
     )
 
     # Student sheets + optional cover
@@ -673,6 +678,7 @@ def main():
             professor=args.professor,
             exam_date=args.exam_date,
             prefix_header_only=args.prefix_header_only,
+            question_label=args.question_label,
         )
         answer_paths.append(str(ans_pdf_tmp))
 
