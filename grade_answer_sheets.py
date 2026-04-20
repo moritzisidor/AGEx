@@ -851,7 +851,7 @@ def main() -> None:
     ap.add_argument("--student-id-count", type=int, default=None,
                     help="Number of expected student IDs. If provided with --student-id-start, missing sheets are written as NA. (not needed if student-names-csv is provided)")
     ap.add_argument("--student-names-csv", default=None,
-                    help="Path to CSV file with student names. One name per row or comma-separated values. Names are paired with student IDs starting from 1. When provided, --student-id-start and --student-id-count are not required.")
+                    help="Path to CSV file with student names. One name per row or comma-separated values. IDs are assigned using --student-id-start if given, otherwise the value stored in layout.json, otherwise 1.")
     args = ap.parse_args()
 
     layout = load_layout(args.layout)
@@ -871,17 +871,17 @@ def main() -> None:
                     if nm:
                         names_list.append(nm)
         
-        # Map names to student IDs based on order
+        # Map names to student IDs based on order.
+        # Priority: explicit CLI flag > layout.json value > default (1)
         if args.student_id_start is not None:
             start_id = args.student_id_start
-            for i, nm in enumerate(names_list):
-                sid = str(start_id + i).zfill(sid_digits)
-                student_names[sid] = nm
+        elif layout.get("student_id_start") is not None:
+            start_id = int(layout["student_id_start"])
         else:
-            # If no student-id-start provided, just enumerate from 1
-            for i, nm in enumerate(names_list, start=1):
-                sid = str(i).zfill(sid_digits)
-                student_names[sid] = nm
+            start_id = 1
+        for i, nm in enumerate(names_list):
+            sid = str(start_id + i).zfill(sid_digits)
+            student_names[sid] = nm
 
     pages = load_pdf_pages(args.scans, dpi=300)
     if not pages:

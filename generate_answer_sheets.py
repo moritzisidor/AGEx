@@ -507,7 +507,7 @@ def main():
     ap.add_argument("--student-id-count", type=int, default=1,
                     help="Number of incremental student IDs to generate (not needed if student-names-csv is provided)")
     ap.add_argument("--student-names-csv", default=None,
-                    help="Path to CSV file with student names. One name per row or comma-separated values. Names are paired with student IDs starting from 1. When provided, --student-id-start and --student-id-count are not required.")
+                    help="Path to CSV file with student names. One name per row or comma-separated values. Names are paired with student IDs starting from --student-id-start (default 1). The start ID is stored in layout.json so the grader picks it up automatically.")
     ap.add_argument("--answer-key", required=True)
     ap.add_argument("--outdir", default="out")
     ap.add_argument(
@@ -591,6 +591,9 @@ def main():
         layout["question_prefix"] = prefix
     else:
         layout["question_prefix"] = ""
+
+    # Store the student-id-start so the grader can pick it up automatically
+    layout["student_id_start"] = args.student_id_start
 
     # Store whether the prefix should appear only in the header (between ID and name)
     layout["prefix_header_only"] = bool(args.prefix_header_only)
