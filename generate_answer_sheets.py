@@ -503,7 +503,7 @@ def main():
     ap.add_argument("--box-size-mm", type=float, default=3.5,
                     help="Checkbox size in millimeters (default: 3.5mm)")
     ap.add_argument("--student-id-start", type=int, default=1,
-                    help="Starting student ID number (not needed if student-names-csv is provided)")
+                    help="Starting student ID number (optional, default=1)")
     ap.add_argument("--student-id-count", type=int, default=1,
                     help="Number of incremental student IDs to generate (not needed if student-names-csv is provided)")
     ap.add_argument("--student-names-csv", default=None,
@@ -522,7 +522,7 @@ def main():
             "When set, the answer-sheet prefix (e.g. 'A') is displayed only "
             "between the Student ID and the Student Name in the header line, "
             "NOT as a prefix of each question label. Without this flag the "
-            "prefix appears on every question (e.g. 'Frage A.1')."
+            "prefix appears on every question (e.g. 'Question A.1')."
         ),
     )
 
@@ -533,7 +533,7 @@ def main():
     ap.add_argument("--no-cover", action="store_true",
                     help="Disable cover sheet generation even if --cover-tex is provided.")
     ap.add_argument("--no-cover-fields", action="store_true",
-                    help="Remove the Name/Vorname, Klasse, and Unterschrift lines from the cover sheet.")
+                    help="Remove the Last Name/First Name, Class, and Signature lines from the cover sheet.")
 
     # Output control
     ap.add_argument(
